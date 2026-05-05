@@ -1,74 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Trash2, X, HardDrive } from 'lucide-react';
+import { Database, Trash2, X, HardDrive, GitBranch, Activity, Smartphone, CheckCircle2 } from 'lucide-react';
 
-export default function StorageMonitor({ onClose }) {
+export default function StorageMonitor({ onClose, gitAuth, apiStatus, onGitSync, isGitHubSyncing, isGitLabSyncing }) {
   const [localStorageSize, setLocalStorageSize] = useState(0);
   const [cacheSize, setCacheSize] = useState(0);
 
   const calculateSize = async () => {
-    // 1. Calculate LocalStorage Size
     let _lsTotal = 0;
     for (let x in localStorage) {
       if (!localStorage.hasOwnProperty(x)) continue;
-      _lsTotal += ((localStorage[x].length + x.length) * 2); // roughly 2 bytes per char
+      _lsTotal += ((localStorage[x].length + x.length) * 2);
     }
     setLocalStorageSize(_lsTotal);
 
-    // 2. Estimate Cache Storage (Service Worker PWA UI Assets)
     if ('caches' in window) {
       try {
         let _cacheTotal = 0;
-        const cacheNames = await caches.keys();
-        for (const name of cacheNames) {
-          const cache = await caches.open(name);
-          const requests = await cache.keys();
-          // We can't easily get exact byte size of all cached assets without fetching them all,
-          // so we use a rough heuristic or just show the number of cached assets.
-          // For a more exact size, we'd need StorageManager API.
-          _cacheTotal += requests.length * 1024 * 50; // VERY rough estimate: 50kb per asset
-        }
-        
-        // Use Storage API if available for more accurate quota
         if (navigator.storage && navigator.storage.estimate) {
           const estimate = await navigator.storage.estimate();
-          if (estimate.usage) {
-            _cacheTotal = estimate.usage;
-          }
+          if (estimate.usage) _cacheTotal = estimate.usage;
         }
         setCacheSize(_cacheTotal);
-      } catch (err) {
-        console.error("Failed to estimate cache size", err);
-      }
+      } catch (err) {}
     }
   };
 
   useEffect(() => {
     calculateSize();
-    // Refresh every 5 seconds while open
     const interval = setInterval(calculateSize, 5000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleClearCache = async () => {
-    const confirmClear = window.confirm(
-      "您確定要釋放所有手機端的暫存資料嗎？\n\n這將清除離線日誌，並在下次重整時強制從 NB 重新下載介面資源。"
-    );
-    
-    if (confirmClear) {
-      // Clear LocalStorage (except specific settings if needed, but for now we clear error logs)
-      localStorage.removeItem('link_error_logs');
-      
-      // Clear Service Worker Caches
-      if ('caches' in window) {
-        const cacheNames = await caches.keys();
-        await Promise.all(cacheNames.map(name => caches.delete(name)));
-      }
-      
-      alert('手機存儲空間與 PWA 緩存已成功釋放。');
-      calculateSize();
-      window.location.reload(); // Force reload to fetch fresh UI from NB
-    }
-  };
 
   const formatBytes = (bytes) => {
     if (bytes === 0) return '0 B';
@@ -79,47 +40,74 @@ export default function StorageMonitor({ onClose }) {
   };
 
   return (
-    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="glass-panel" style={{ width: '90%', maxWidth: '350px', padding: '24px', borderRadius: '16px', position: 'relative' }}>
-        <button onClick={onClose} style={{ position: 'absolute', top: '16px', right: '16px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-          <X size={20} />
-        </button>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-          <Database size={20} color="var(--accent-color)" />
-          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>手機空間監控</h3>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+      <div className="glass-panel animate-slide-up" style={{ width: '100%', maxWidth: '400px', padding: '24px', borderRadius: '20px', border: '1px solid var(--border-color)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Activity size={20} color="var(--accent-color)" />
+            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700' }}>系統控制中心</h3>
+          </div>
+          <button onClick={onClose} className="btn" style={{ padding: '4px' }}><X size={24} /></button>
         </div>
 
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '20px', lineHeight: '1.4' }}>
-          GravityLink 以薄客戶端模式運行。核心代碼僅存儲於您的 NB 主機，下方顯示的數據代表緩存的介面資源與用於網路韌性的臨時離線日誌。
-        </p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <HardDrive size={16} color="var(--text-muted)" />
-              <span style={{ fontSize: '0.9rem' }}>離線錯誤日誌</span>
-            </div>
-            <span style={{ fontWeight: '600', color: 'var(--accent-color)' }}>{formatBytes(localStorageSize)}</span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Database size={16} color="var(--text-muted)" />
-              <span style={{ fontSize: '0.9rem' }}>介面資源緩存 (PWA)</span>
-            </div>
-            <span style={{ fontWeight: '600', color: 'var(--success)' }}>{formatBytes(cacheSize)}</span>
+        {/* Section 1: Git & Backup */}
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px', display: 'block' }}>代碼備份與同步</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <button 
+              onClick={() => onGitSync('github')}
+              disabled={isGitHubSyncing}
+              className="btn" 
+              style={{ padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '12px', flexDirection: 'column', gap: '8px', opacity: isGitHubSyncing ? 0.5 : 1 }}
+            >
+              <GitBranch size={20} color={gitAuth.github ? 'var(--success)' : 'var(--text-muted)'} />
+              <span style={{ fontSize: '0.75rem' }}>GitHub</span>
+            </button>
+            <button 
+              onClick={() => onGitSync('gitlab')}
+              disabled={isGitLabSyncing}
+              className="btn" 
+              style={{ padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '12px', flexDirection: 'column', gap: '8px', opacity: isGitLabSyncing ? 0.5 : 1 }}
+            >
+              <GitBranch size={20} color={gitAuth.gitlab ? 'var(--success)' : 'var(--text-muted)'} />
+              <span style={{ fontSize: '0.75rem' }}>GitLab</span>
+            </button>
           </div>
         </div>
 
-        <button 
-          onClick={handleClearCache}
-          className="btn" 
-          style={{ width: '100%', padding: '12px', background: 'rgba(218, 54, 51, 0.1)', color: 'var(--danger)', border: '1px solid rgba(218, 54, 51, 0.3)', borderRadius: '8px', gap: '8px', fontWeight: '500' }}
-        >
-          <Trash2 size={16} />
-          清除手機暫存空間
-        </button>
+        {/* Section 2: AI & System Status */}
+        <div style={{ marginBottom: '24px', padding: '14px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.03)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+               <CheckCircle2 size={14} /> AI 狀態
+            </span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--success)', fontWeight: 'bold' }}>{apiStatus.model || 'Ready'}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+               <Smartphone size={14} /> 手機快取
+            </span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--accent-color)' }}>{formatBytes(cacheSize + localStorageSize)}</span>
+          </div>
+        </div>
+
+        {/* Section 3: Maintenance */}
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={onClose}
+            className="btn" 
+            style={{ flex: 1, padding: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '12px', fontSize: '0.9rem' }}
+          >
+            關閉
+          </button>
+          <button 
+            onClick={() => { if(window.confirm('確定清除快取？')) { localStorage.clear(); window.location.reload(); } }}
+            className="btn" 
+            style={{ padding: '12px', background: 'rgba(218, 54, 51, 0.1)', color: 'var(--danger)', border: '1px solid rgba(218, 54, 51, 0.2)', borderRadius: '12px' }}
+          >
+            <Trash2 size={18} />
+          </button>
+        </div>
       </div>
     </div>
   );

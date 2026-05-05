@@ -26,23 +26,19 @@ export default function App() {
   const [apiStatus, setApiStatus] = useState({ online: false, healthy: false, model: '' });
   const [currentPort, setCurrentPort] = useState(3001); // Default from socket.js
   const lastPinRef = useRef(null); // Store PIN for auto-reauth
+  const [isGitHubSyncing, setIsGitHubSyncing] = useState(false);
+  const [isGitLabSyncing, setIsGitLabSyncing] = useState(false);
   
   // Antigravity UI & MP States
   const MODELS = [
-    'Gemini 3.1 Pro (High)',
-    'Gemini 3.1 Pro (Low)',
-    'Gemini 3 Flash',
-    'Claude Sonnet 4.6 (Thinking)',
-    'Claude Opus 4.6 (Thinking)',
-    'GPT-OSS 120B (Medium)'
+    'Gemini 2.0 Flash (High)',
+    'Gemini 2.0 Flash Lite (Lite)',
+    'Gemini 1.5 Pro (Extreme)',
   ];
   const MOCK_QUOTAS = {
-    'Gemini 3.1 Pro (High)': { max: 2000000, used: 850000, reset: '5/7 00:00' },
-    'Gemini 3.1 Pro (Low)': { max: 2000000, used: 850000, reset: '5/7 08:00' },
-    'Gemini 3 Flash': { max: 10000000, used: 1500000, reset: '5/7 12:00' },
-    'Claude Sonnet 4.6 (Thinking)': { max: 200000, used: 20000, reset: '5/6 18:00' },
-    'Claude Opus 4.6 (Thinking)': { max: 100000, used: 5000, reset: '5/6 22:00' },
-    'GPT-OSS 120B (Medium)': { max: 500000, used: 420000, reset: '5/7 04:00' }
+    'Gemini 2.0 Flash (High)': { max: 1000000, used: 150000, reset: '5/7 00:00' },
+    'Gemini 2.0 Flash Lite (Lite)': { max: 5000000, used: 250000, reset: '5/7 08:00' },
+    'Gemini 1.5 Pro (Extreme)': { max: 50000, used: 12000, reset: '5/7 12:00' },
   };
   
   const [selectedModel, setSelectedModel] = useState(MODELS[0]);
@@ -192,13 +188,6 @@ export default HelloWorld;
       }
     };
 
-    useEffect(() => {
-      if (cooldown > 0) {
-        const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
-        return () => clearTimeout(timer);
-      }
-    }, [cooldown]);
-
     socket.on('connect', onConnect);
     socket.on('auth_required', onAuthRequired);
     socket.on('disconnect', onDisconnect);
@@ -213,7 +202,6 @@ export default HelloWorld;
 
     const handlePortHop = (e) => setCurrentPort(e.detail);
     window.addEventListener('port_hop', handlePortHop);
-
     return () => {
       socket.off('connect', onConnect);
       socket.off('auth_required', onAuthRequired);
@@ -229,6 +217,13 @@ export default HelloWorld;
       window.removeEventListener('port_hop', handlePortHop);
     };
   }, []);
+
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
 
   // Auto-Save Logic (Debounced)
   useEffect(() => {
@@ -516,17 +511,13 @@ export default HelloWorld;
 
   return (
     <>
-      <div className="landscape-prompt">
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <Smartphone size={48} style={{ marginBottom: '16px', color: 'var(--accent-color)', transform: 'rotate(90deg)', animation: 'pulse 2s infinite' }} />
-          <h2 style={{ margin: '0 0 8px 0', fontSize: '1.2rem' }}>請將手機轉為橫向</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>GravityLink 專為橫向開發設計</p>
-        </div>
-      </div>
-      <div className="app-container" style={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%', backgroundColor: 'var(--bg-color)' }}>
+      <div className={`app-container ${activeTab === 'files' ? 'hide-main' : ''}`} style={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%', backgroundColor: 'var(--bg-color)' }}>
 
-      {/* Left Pane: 1/3 File Explorer (Read-Only) */}
-      <aside style={{ width: '33.33%', minWidth: '250px', borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Left Pane: File Explorer (Sidebar) */}
+      <aside 
+        className={activeTab === 'files' ? 'sidebar-active' : 'sidebar-hidden'}
+        style={{ width: '33.33%', minWidth: '250px', borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', height: '100%' }}
+      >
         <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-glass)' }}>
           <h2 style={{ fontSize: '1rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <FolderTree size={18} color="var(--accent-color)" />
@@ -539,8 +530,8 @@ export default HelloWorld;
         </div>
       </aside>
 
-      {/* Right Pane: 2/3 Main Workspace */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', width: '66.66%' }}>
+      {/* Right Pane: Main Workspace */}
+      <div className="main-workspace" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', width: '66.66%' }}>
         {/* Header */}
       <header className="glass-panel app-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -550,7 +541,7 @@ export default HelloWorld;
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{ fontSize: '1rem', fontWeight: '700', color: 'white', margin: 0 }}>GravityLink <span style={{ fontSize: '0.65rem', color: 'var(--accent-color)', background: 'rgba(47,129,247,0.1)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--accent-glow)' }}>v1.0.2 穩定版</span></h1>
+              <h1 style={{ fontSize: '1rem', fontWeight: '700', color: 'white', margin: 0 }}>GravityLink <span style={{ fontSize: '0.65rem', color: 'var(--accent-color)', background: 'rgba(47,129,247,0.1)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--accent-glow)' }}>v1.11 穩定版</span></h1>
               {isConnected ? <CheckCircle2 size={12} color="var(--success)" /> : <WifiOff size={12} color="var(--danger)" />}
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
@@ -558,113 +549,78 @@ export default HelloWorld;
             </p>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        
+        {/* Desktop/Tablet Header Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           
-          {/* Consolidated Status Lights */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '4px 12px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)' }}>
-            {/* NB Connection */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title={isConnected ? '已連線至 NB' : '未連線'}>
-              <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: isConnected ? 'var(--success)' : 'var(--danger)', boxShadow: isConnected ? '0 0 6px var(--success)' : 'none' }}></div>
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>NB</span>
-            </div>
-            {/* Gemini API */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title={apiStatus.healthy ? `Gemini API 正常 (${apiStatus.model})` : 'Gemini API 離線'}>
-              <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: apiStatus.healthy ? 'var(--success)' : apiStatus.online ? 'var(--warning)' : 'var(--danger)', boxShadow: apiStatus.healthy ? '0 0 6px var(--success)' : 'none' }}></div>
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>AI</span>
-            </div>
-            {/* GitHub */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title={gitAuth.github ? 'GitHub 已連結' : 'GitHub 未連結'}>
-              <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: gitAuth.github ? 'var(--success)' : 'var(--danger)', boxShadow: gitAuth.github ? '0 0 6px var(--success)' : 'none' }}></div>
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>GitHub</span>
-            </div>
-            {/* GitLab */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title={gitAuth.gitlab ? 'GitLab 已連結' : 'GitLab 未連結'}>
-              <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: gitAuth.gitlab ? 'var(--success)' : 'var(--danger)', boxShadow: gitAuth.gitlab ? '0 0 6px var(--success)' : 'none' }}></div>
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>GitLab</span>
-            </div>
+          {/* Quick Status Pill */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 10px', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)' }}>
+             <div style={{ width: 6, height: 6, borderRadius: '50%', background: isConnected ? 'var(--success)' : 'var(--danger)' }}></div>
+             <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>{isConnected ? 'ONLINE' : 'OFFLINE'}</span>
           </div>
 
-          {/* GitHub Backup */}
-          <button 
-            className="btn" 
-            onClick={() => handleGitSync('github')} 
-            disabled={isGitHubSyncing}
-            style={{ padding: '5px 8px', borderRadius: '8px', background: 'var(--bg-glass)', border: '1px solid var(--border-color)', color: isGitHubSyncing ? 'var(--accent-color)' : 'var(--text-main)', opacity: isGitHubSyncing ? 0.5 : 1 }} 
-            title="備份至 GitHub"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className={isGitHubSyncing ? 'animate-pulse' : ''}><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.39.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.02 0c2.3-1.55 3.3-1.23 3.3-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.82.58C20.57 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
-          </button>
-          {/* GitLab Backup */}
-          <button 
-            className="btn" 
-            onClick={() => handleGitSync('gitlab')} 
-            disabled={isGitLabSyncing}
-            style={{ padding: '5px 8px', borderRadius: '8px', background: 'var(--bg-glass)', border: '1px solid var(--border-color)', color: isGitLabSyncing ? 'var(--accent-color)' : 'var(--text-main)', opacity: isGitLabSyncing ? 0.5 : 1 }} 
-            title="備份至 GitLab"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className={isGitLabSyncing ? 'animate-pulse' : ''}><path d="M23.6 9.59l-.03-.09-3.28-8.56a.87.87 0 0 0-.33-.36.89.89 0 0 0-1.01.12.87.87 0 0 0-.26.39l-2.21 6.78H7.53L5.32 1.09a.87.87 0 0 0-.26-.39.89.89 0 0 0-1.01-.12.87.87 0 0 0-.33.36L.44 9.5l-.03.09a6.2 6.2 0 0 0 2.06 7.17l.01.01.04.03 5.09 3.81 2.52 1.91 1.53 1.16a1.03 1.03 0 0 0 1.25 0l1.53-1.16 2.52-1.91 5.13-3.84.01-.01a6.2 6.2 0 0 0 2.06-7.17z"/></svg>
-          </button>
+          {/* Unified Action Menu Trigger */}
+          <div style={{ position: 'relative' }}>
+            <button 
+              className="btn" 
+              onClick={() => setShowStorageMonitor(!showStorageMonitor)} 
+              style={{ padding: '8px', background: 'var(--bg-glass)', border: '1px solid var(--border-color)', borderRadius: '8px' }}
+            >
+              <MoreVertical size={20} />
+            </button>
+            
+            {/* Quick Actions overlay when needed or just use the existing storage monitor as a gateway */}
+          </div>
 
-          {/* Storage Monitor Toggle */}
-          <button className="btn" onClick={() => setShowStorageMonitor(true)} style={{ padding: '4px', color: 'var(--text-muted)' }} title="存儲空間監控">
-            <Database size={18} />
-          </button>
-
-          {/* Auto-Save Indicator */}
-          {activeTab === 'editor' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: saveStatus === 'saved' ? 'var(--success)' : 'var(--text-muted)', fontSize: '0.75rem', marginRight: '4px' }}>
-              {saveStatus === 'saved' ? (
-                <><CheckCircle2 size={12} /> 已存檔</>
-              ) : saveStatus === 'saving' ? (
-                <span className="animate-pulse">存檔中...</span>
-              ) : null}
-            </div>
-          )}
-
-          <button className="btn btn-primary" style={{ padding: '8px 16px', gap: '6px' }}>
+          <button className="btn btn-primary" style={{ padding: '8px 14px', gap: '6px', borderRadius: '8px' }}>
             <Play size={14} fill="white" />
-            <span style={{ fontSize: '0.85rem' }}>啟動項目</span>
+            <span style={{ fontSize: '0.85rem' }}>啟動</span>
           </button>
         </div>
       </header>
 
-        {/* Main Content Area */}
-        <main style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-          {renderContent()}
-        </main>
+      <main style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {renderContent()}
+      </main>
 
-        {/* Bottom Navigation for Right Pane */}
-        <nav className="glass-panel bottom-nav" style={{ display: 'flex', justifyContent: 'space-around', padding: '8px 0', borderTop: '1px solid var(--border-color)', zIndex: 10 }}>
-          <button 
-            className="btn" 
-            onClick={() => setActiveTab('editor')}
-            style={{ flexDirection: 'column', gap: '4px', color: activeTab === 'editor' ? 'var(--accent-color)' : 'var(--text-muted)', background: 'transparent', boxShadow: 'none' }}
-          >
-            <Code2 size={22} />
-            <span style={{ fontSize: '0.7rem', fontWeight: '500' }}>編輯器</span>
-          </button>
-          <button 
-            className="btn" 
-            onClick={() => setActiveTab('terminal')}
-            style={{ flexDirection: 'column', gap: '4px', color: activeTab === 'terminal' ? 'var(--accent-color)' : 'var(--text-muted)', background: 'transparent', boxShadow: 'none' }}
-          >
-            <Terminal size={22} />
-            <span style={{ fontSize: '0.7rem', fontWeight: '500' }}>控制台</span>
-          </button>
-          <button 
-            className="btn" 
-            onClick={() => setActiveTab('ai')}
-            style={{ flexDirection: 'column', gap: '4px', color: activeTab === 'ai' ? 'var(--accent-color)' : 'var(--text-muted)', background: 'transparent', boxShadow: 'none' }}
-          >
-            <Bot size={22} />
-            <span style={{ fontSize: '0.7rem', fontWeight: '500' }}>AI 對話</span>
-          </button>
-        </nav>
-      </div>
-      </div>
+      </div> {/* End Main Workspace */}
 
-      {/* Storage Monitor Modal */}
-      {showStorageMonitor && <StorageMonitor onClose={() => setShowStorageMonitor(false)} />}
+      {/* Global Bottom Navigation (Visible in all tabs) */}
+      <nav className="glass-panel bottom-nav" style={{ 
+        position: 'fixed', bottom: 0, left: 0, right: 0, 
+        display: 'flex', justifyContent: 'space-around', 
+        padding: '8px 0', borderTop: '1px solid var(--border-color)', 
+        zIndex: 100, background: 'var(--bg-glass)', backdropFilter: 'blur(10px)' 
+      }}>
+        <button className="btn" onClick={() => setActiveTab('files')} style={{ flexDirection: 'column', gap: '4px', color: activeTab === 'files' ? 'var(--accent-color)' : 'var(--text-muted)', background: 'transparent' }}>
+          <FolderTree size={20} />
+          <span style={{ fontSize: '0.65rem' }}>檔案</span>
+        </button>
+        <button className="btn" onClick={() => setActiveTab('editor')} style={{ flexDirection: 'column', gap: '4px', color: activeTab === 'editor' ? 'var(--accent-color)' : 'var(--text-muted)', background: 'transparent' }}>
+          <Code2 size={20} />
+          <span style={{ fontSize: '0.65rem' }}>編輯</span>
+        </button>
+        <button className="btn" onClick={() => setActiveTab('terminal')} style={{ flexDirection: 'column', gap: '4px', color: activeTab === 'terminal' ? 'var(--accent-color)' : 'var(--text-muted)', background: 'transparent' }}>
+          <Terminal size={20} />
+          <span style={{ fontSize: '0.65rem' }}>終端</span>
+        </button>
+        <button className="btn" onClick={() => setActiveTab('ai')} style={{ flexDirection: 'column', gap: '4px', color: activeTab === 'ai' ? 'var(--accent-color)' : 'var(--text-muted)', background: 'transparent' }}>
+          <Bot size={20} />
+          <span style={{ fontSize: '0.65rem' }}>助理</span>
+        </button>
+      </nav>
+    </div> {/* End App Container */}
+
+    {showStorageMonitor && (
+      <StorageMonitor 
+        onClose={() => setShowStorageMonitor(false)} 
+        gitAuth={gitAuth}
+        apiStatus={apiStatus}
+        onGitSync={handleGitSync}
+        isGitHubSyncing={isGitHubSyncing}
+        isGitLabSyncing={isGitLabSyncing}
+      />
+    )}
     </>
   );
 }

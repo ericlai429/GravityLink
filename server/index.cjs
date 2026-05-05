@@ -19,35 +19,42 @@ if (!fs.existsSync(I13_CTRL_DIR)) fs.mkdirSync(I13_CTRL_DIR, { recursive: true }
 
 // --- GEMINI AI INITIALIZATION ---
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-let geminiModel = null;
 
-    if (GEMINI_API_KEY) {
-  const { GoogleGenerativeAI } = require('@google/generative-ai');
-  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-  geminiModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
-  console.log('🧠 Gemini AI: ONLINE (gemini-2.0-flash-lite)');
+if (GEMINI_API_KEY) {
+  console.log('🧠 Gemini AI Dynamic Engine: READY');
 } else {
   console.log('⚠️  Gemini AI: OFFLINE (未設定 GEMINI_API_KEY)');
 }
 
 const chatHistories = new Map();
+const modelInstances = new Map(); // Cache model instances
 
-async function getAIResponse(prompt, socketId, io) {
+async function getAIResponse(prompt, socketId, io, selectedModel = 'Gemini 2.0 Flash Lite') {
   if (!chatHistories.has(socketId)) chatHistories.set(socketId, []);
   const history = chatHistories.get(socketId);
   
-  if (geminiModel) {
+  // Map UI Label to Real Gemini Model ID
+  let modelId = 'gemini-2.0-flash-lite';
+  if (selectedModel.includes('Pro')) modelId = 'gemini-1.5-pro';
+  else if (selectedModel.includes('Flash')) modelId = 'gemini-2.0-flash';
+  
+  if (!GEMINI_API_KEY) return `[離線模式] 未設定 GEMINI_API_KEY。`;
+
+  try {
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: modelId });
+
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const chat = geminiModel.startChat({
-          history: history.slice(-10),
+        const chat = model.startChat({
+          history: history.slice(-8), // Keep context lean
           generationConfig: { maxOutputTokens: 2048 },
         });
         const result = await chat.sendMessage(prompt);
         const reply = result.response.text();
         
-        // Success: set light to healthy
-        io.sockets.emit('system_status', encryptPayload({ gemini: { online: true, healthy: true, model: 'gemini-2.0-flash-lite' } }));
+        io.sockets.emit('system_status', encryptPayload({ gemini: { online: true, healthy: true, model: modelId } }));
 
         history.push({ role: 'user', parts: [{ text: prompt }] });
         history.push({ role: 'model', parts: [{ text: reply }] });
@@ -57,25 +64,23 @@ async function getAIResponse(prompt, socketId, io) {
         const isServiceBusy = err.message.includes('503') || err.message.includes('Service Unavailable');
         
         if (isRateLimit) {
-          // Broadcast warning status
-          io.sockets.emit('system_status', encryptPayload({ gemini: { online: true, healthy: false, warning: true, model: 'gemini-2.0-flash-lite' } }));
+          io.sockets.emit('system_status', encryptPayload({ gemini: { online: true, healthy: false, warning: true, model: modelId } }));
         }
 
         if ((isRateLimit || isServiceBusy) && attempt < 2) {
-          const delay = isRateLimit ? 15000 : 3000;
-          console.log(`[Gemini] ${isRateLimit ? '額度限制' : '伺服器繁忙'}，${delay/1000}秒後重試 (第 ${attempt + 1} 次)...`);
+          const delay = isRateLimit ? 10000 : 2000;
+          io.sockets.emit('ai_message', encryptPayload({ role: 'ai', text: `[NB] 伺服器繁忙，${delay/1000}秒後重試...` }));
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
         
-        let errorMsg = 'AI 暫時無法回應';
-        if (isRateLimit) errorMsg = '請求過於頻繁（免費額度用完），請等 1 分鐘後再試。';
-        if (isServiceBusy) errorMsg = 'AI 伺服器目前繁忙中，請稍後再試。';
-        return `[${errorMsg}] ${err.message.substring(0, 100)}`;
+        throw err;
       }
     }
-  } else {
-    return `[離線模式] 未設定 GEMINI_API_KEY 環境變數。`;
+  } catch (err) {
+    let errorMsg = 'AI 暫時無法回應';
+    if (err.message.includes('429')) errorMsg = '額度已達上限，請切換至 Flash 模型。';
+    return `[${errorMsg}] ${err.message.substring(0, 100)}`;
   }
 }
 
@@ -169,17 +174,12 @@ io.on('connection', (socket) => {
       } catch(e) {}
 
       let apiOk = false;
-      if (geminiModel) {
-        try {
-          await geminiModel.generateContent('ping');
-          apiOk = true;
-        } catch(e) {
-          console.log(`[API] Gemini health check: ${e.message.substring(0, 60)}`);
-        }
+      if (GEMINI_API_KEY) {
+        apiOk = true; // Assume OK if key exists, dynamic handler will verify health
       }
 
       socket.emit('system_status', encryptPayload({
-        gemini: { online: !!geminiModel, healthy: apiOk, model: 'gemini-2.0-flash-lite' },
+        gemini: { online: !!GEMINI_API_KEY, healthy: apiOk, model: 'Dynamic' },
         git: { hasUser: !!gitUser, username: gitUser || '未設定', github: hasGithub, gitlab: hasGitlab },
         server: { port: 3001, sandbox: SANDBOX_DIR }
       }));
@@ -197,8 +197,9 @@ io.on('connection', (socket) => {
     }
     
     const prompt = payload.prompt;
+    const selectedModel = payload.model || 'Gemini 2.0 Flash Lite';
     const promptLower = prompt.toLowerCase();
-    console.log(`[AI] "${prompt}" | Devices: ${io.engine.clientsCount}`);
+    console.log(`[AI] "${prompt}" | Model: ${selectedModel}`);
     
     socket.broadcast.emit('ai_message', encryptPayload({ role: 'user', text: prompt }));
     io.sockets.emit('ai_state_change', encryptPayload({ isGenerating: true }));
@@ -212,7 +213,7 @@ io.on('connection', (socket) => {
       io.sockets.emit('ai_message', encryptPayload({ role: 'ai', text: '[NB] 已偵測到代碼變更需求。' }));
     } else {
       try {
-        const aiReply = await getAIResponse(prompt, socket.id, io);
+        const aiReply = await getAIResponse(prompt, socket.id, io, selectedModel);
         io.sockets.emit('ai_message', encryptPayload({ role: 'ai', text: aiReply }));
       } catch (err) {
         io.sockets.emit('ai_message', encryptPayload({ role: 'ai', text: `[NB] AI 回應失敗: ${err.message}` }));

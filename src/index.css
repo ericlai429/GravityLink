@@ -187,34 +187,54 @@ body {
   z-index: 5;
 }
 
-/* Portrait Mode Enforcer */
-.landscape-prompt {
-  display: none;
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: var(--bg-color);
-  z-index: 9999;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-}
-
-@media screen and (orientation: portrait) and (max-width: 768px) {
-  .landscape-prompt {
-    display: flex;
-  }
+/* Responsive Mobile Layout */
+@media screen and (orientation: portrait) {
   .app-container {
+    flex-direction: column !important;
+  }
+  
+  /* Hide sidebar by default in portrait, unless it's the active tab */
+  aside.sidebar-active {
+    width: 100% !important;
+    min-width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+  }
+  
+  aside.sidebar-hidden {
+    display: none !important;
+  }
+
+  .main-workspace {
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+  }
+
+  /* When files are active in portrait, hide the main workspace */
+  .app-container.hide-main .main-workspace {
     display: none !important;
   }
 }
 
-/* AI Chat Tab Layout */
+.landscape-prompt {
+  display: none !important;
+}
+
 .ai-chat-container {
   display: flex;
   flex-direction: column;
   height: 100%;
   background-color: var(--bg-panel);
   position: relative;
+  padding-bottom: 60px; /* Space for fixed bottom nav */
+}
+
+/* Ensure sidebar also accounts for fixed nav in portrait */
+@media screen and (orientation: portrait) {
+  aside {
+    padding-bottom: 60px;
+  }
 }
 
 .chat-history {
