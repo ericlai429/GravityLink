@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Code2, FolderTree, TerminalSquare, BotMessageSquare, MoreVertical, Wifi, WifiOff, CheckCircle2, ImagePlus, ChevronDown, Database, GitBranch, Square, FileText, Check, X, Plus, Smartphone } from 'lucide-react';
+import { Play, Code2, FolderTree, Terminal, Bot, MoreVertical, Wifi, WifiOff, CheckCircle2, ImagePlus, ChevronDown, Database, GitBranch, Square, FileText, Check, X, Plus, Smartphone, Trash2 } from 'lucide-react';
 import EditorView from './components/EditorView';
 import TerminalView from './components/TerminalView';
 import FileExplorer from './components/FileExplorer';
@@ -22,7 +22,6 @@ export default function App() {
   const [showStorageMonitor, setShowStorageMonitor] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [systemLogs, setSystemLogs] = useState([]);
-
   const [gitAuth, setGitAuth] = useState({ hasUser: false, username: '', hasRemote: false });
   const [apiStatus, setApiStatus] = useState({ online: false, healthy: false, model: '' });
   const [currentPort, setCurrentPort] = useState(3001); // Default from socket.js
@@ -71,6 +70,34 @@ function HelloWorld() {
 
 export default HelloWorld;
 `);
+
+  const addLog = (text, type = 'info') => {
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setSystemLogs(prev => [{ time, text, type }, ...prev].slice(0, 30));
+  };
+
+  const playSound = (type) => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      if (type === 'send') {
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.05);
+      } else {
+        osc.frequency.setValueAtTime(660, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.05);
+      }
+      gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.1);
+    } catch(e) {}
+  };
+
+  const vibrate = (p = 10) => { if ('vibrate' in navigator) navigator.vibrate(p); };
 
   // Socket Connection Handling
   useEffect(() => {
@@ -232,36 +259,6 @@ export default HelloWorld;
       />
     );
   }
-
-  const [systemLogs, setSystemLogs] = useState([]);
-
-  const addLog = (text, type = 'info') => {
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setSystemLogs(prev => [{ time, text, type }, ...prev].slice(0, 30));
-  };
-
-  const playSound = (type) => {
-    try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      if (type === 'send') {
-        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.05);
-      } else {
-        osc.frequency.setValueAtTime(660, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.05);
-      }
-      gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.1);
-    } catch(e) {}
-  };
-
-  const vibrate = (p = 10) => { if ('vibrate' in navigator) navigator.vibrate(p); };
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -651,7 +648,7 @@ export default HelloWorld;
             onClick={() => setActiveTab('terminal')}
             style={{ flexDirection: 'column', gap: '4px', color: activeTab === 'terminal' ? 'var(--accent-color)' : 'var(--text-muted)', background: 'transparent', boxShadow: 'none' }}
           >
-            <TerminalSquare size={22} />
+            <Terminal size={22} />
             <span style={{ fontSize: '0.7rem', fontWeight: '500' }}>控制台</span>
           </button>
           <button 
@@ -659,15 +656,15 @@ export default HelloWorld;
             onClick={() => setActiveTab('ai')}
             style={{ flexDirection: 'column', gap: '4px', color: activeTab === 'ai' ? 'var(--accent-color)' : 'var(--text-muted)', background: 'transparent', boxShadow: 'none' }}
           >
-            <BotMessageSquare size={22} />
+            <Bot size={22} />
             <span style={{ fontSize: '0.7rem', fontWeight: '500' }}>AI 對話</span>
           </button>
         </nav>
       </div>
+      </div>
 
       {/* Storage Monitor Modal */}
       {showStorageMonitor && <StorageMonitor onClose={() => setShowStorageMonitor(false)} />}
-      </div>
     </>
   );
 }
