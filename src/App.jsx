@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Code2, FolderTree, Terminal, Bot, MoreVertical, Wifi, WifiOff, CheckCircle2, ImagePlus, ChevronDown, Database, GitBranch, Square, FileText, Check, X, Plus, Smartphone, Trash2 } from 'lucide-react';
+import { Play, Code2, FolderTree, Terminal, Bot, MoreVertical, Plus, Trash2, Smartphone, ChevronDown, RefreshCw, AlertTriangle, Shield, Activity, Cpu, Zap } from 'lucide-react';
 import EditorView from './components/EditorView';
 import TerminalView from './components/TerminalView';
 import FileExplorer from './components/FileExplorer';
@@ -8,139 +8,195 @@ import StorageMonitor from './components/StorageMonitor';
 import { socket, sendEncrypted } from './utils/socket';
 import { encryptPayload, decryptPayload } from './utils/crypto';
 
+// Native SVGs
+const GithubIcon = ({ color = "currentColor", size = 20, active = false }) => (
+  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={active ? "var(--accent-color)" : "var(--text-muted)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
+    <div style={{ position: 'absolute', top: -1, right: -1, width: 6, height: 6, borderRadius: '50%', background: active ? 'var(--success)' : 'var(--danger)', boxShadow: active ? '0 0 8px var(--success)' : 'none', border: '1px solid black' }}></div>
+  </div>
+);
+
+const GitlabIcon = ({ color = "currentColor", size = 20, active = false }) => (
+  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={active ? "var(--warning)" : "var(--text-muted)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 13.29-3.33-10a.42.42 0 0 0-.14-.18.38.38 0 0 0-.22-.11.39.39 0 0 0-.23.07.42.42 0 0 0-.14.18l-2.26 6.67H8.32L6.06 3.27a.42.42 0 0 0-.14-.18.38.38 0 0 0-.22-.07.4.4 0 0 0-.23.07.42.42 0 0 0-.14.18L2 13.29a.74.74 0 0 0 .27.83L12 21l9.73-6.88a.74.74 0 0 0 .27-.83Z"></path></svg>
+    <div style={{ position: 'absolute', top: -1, right: -1, width: 6, height: 6, borderRadius: '50%', background: active ? 'var(--success)' : 'var(--danger)', boxShadow: active ? '0 0 8px var(--success)' : 'none', border: '1px solid black' }}></div>
+  </div>
+);
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [activeTab, setActiveTab] = useState('editor');
+  const [activeTab, setActiveTab] = useState('ai');
   const [isConnected, setIsConnected] = useState(socket.connected);
+  const [gitAuth, setGitAuth] = useState({ github: true, gitlab: true });
+  const [apiStatus, setApiStatus] = useState({ healthy: true, model: 'Multi-Engine' });
+  const [GEMINI_API_KEY_VALID, setKeyValid] = useState(false);
   const [showStorageMonitor, setShowStorageMonitor] = useState(false);
-  const [gitAuth, setGitAuth] = useState({ github: false, gitlab: false });
-  const [apiStatus, setApiStatus] = useState({ healthy: false, model: '' });
-  const [isGitHubSyncing, setIsGitHubSyncing] = useState(false);
-  const [isGitLabSyncing, setIsGitLabSyncing] = useState(false);
   
-  const MODELS = ['Gemini 2.0 Flash (High)', 'Gemini 2.0 Flash Lite (Lite)', 'Gemini 1.5 Pro (Extreme)'];
+  const MODELS = [
+    { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+    { id: 'gemini-2.0-pro-exp-02-05', label: 'Gemini 2.0 Pro Exp' },
+    { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+    { id: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 Flash 8B' },
+    { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+    { id: 'gemini-2.0-flash-thinking-exp', label: 'Gemini Thinking' }
+  ];
   const [selectedModel, setSelectedModel] = useState(MODELS[0]);
-  const [modelUsage, setModelUsage] = useState({
-    'Gemini 2.0 Flash (High)': { max: 1000000, used: 150000, reset: '5/7 00:00' },
-    'Gemini 2.0 Flash Lite (Lite)': { max: 5000000, used: 250000, reset: '5/7 08:00' },
-    'Gemini 1.5 Pro (Extreme)': { max: 50000, used: 12000, reset: '5/7 12:00' },
-  });
+  const [modelUsage, setModelUsage] = useState({});
   
   const [isGenerating, setIsGenerating] = useState(false);
-  const [pendingApproval, setPendingApproval] = useState(null);
   const [chatMessages, setChatMessages] = useState([
-    { role: 'assistant', text: "你好！我是 GravityLink 助理。您可以要求我修改檔案或執行任務。" }
+    { role: 'assistant', text: "GravityLink v1.11 專業模型矩陣已就緒。" }
   ]);
   const [chatInput, setChatInput] = useState('');
-  const [currentFile, setCurrentFile] = useState('App.jsx');
-  const [code, setCode] = useState('// Welcome to GravityLink v1.11');
+  const [code, setCode] = useState('// GravityLink Synchronized Protocol');
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     socket.on('connect', () => setIsConnected(true));
     socket.on('disconnect', () => setIsConnected(false));
+    
     socket.on('ai_message', (enc) => {
       const p = decryptPayload(enc);
-      if(p) { setChatMessages(prev => [...prev, { role: p.role, text: p.text }]); setIsGenerating(false); }
+      if(p) {
+        setChatMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === 'assistant' && (last.text.includes('[') || last.text.includes('...'))) {
+            const updated = [...prev];
+            updated[updated.length - 1] = { ...last, text: p.text };
+            return updated;
+          }
+          return [...prev, { role: p.role, text: p.text }];
+        });
+        if (p.text.includes('[執行完畢]') || p.text.includes('[成功]')) {
+          setIsGenerating(false);
+        }
+      }
     });
+
     socket.on('system_status', (enc) => {
       const data = decryptPayload(enc);
       if (data) {
         if (data.git) setGitAuth(data.git);
         if (data.gemini) setApiStatus(data.gemini);
+        if (data.usage) setModelUsage(data.usage);
+        if (data.keyValid !== undefined) setKeyValid(data.keyValid);
       }
     });
+
+    socket.on('auth_result', (enc) => {
+      const res = decryptPayload(enc);
+      if (res && res.success) setIsAuthenticated(true);
+    });
+
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible' && !socket.connected) socket.connect();
+    };
+    document.addEventListener('visibilitychange', handleVisible);
+
     return () => {
-      socket.off('connect'); socket.off('disconnect'); socket.off('ai_message'); socket.off('system_status');
+      socket.off('ai_message'); socket.off('system_status'); socket.off('auth_result');
+      document.removeEventListener('visibilitychange', handleVisible);
     };
   }, []);
 
   const handleSendChat = () => {
     if (!chatInput.trim() || isGenerating) return;
-    setChatMessages(prev => [...prev, { role: 'user', text: chatInput }]);
+    const msg = chatInput.trim();
+    setChatMessages(prev => [...prev, { role: 'user', text: msg }, { role: 'assistant', text: '[主機通訊中...] 正在等待 NB 回應' }]);
     setIsGenerating(true);
-    sendEncrypted('ai_request', { prompt: chatInput, model: selectedModel }, encryptPayload);
+    sendEncrypted('ai_request', { prompt: msg, modelId: selectedModel.id }, encryptPayload);
     setChatInput('');
   };
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'editor': return <EditorView code={code} setCode={setCode} />;
-      case 'terminal': return <TerminalView />;
-      case 'files': return <FileExplorer />;
-      case 'ai':
-        return (
-          <div className="ai-chat-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <div className="chat-history" style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
-              {chatMessages.map((msg, idx) => (
-                <div key={idx} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', background: msg.role === 'user' ? 'var(--accent-color)' : 'var(--bg-glass)', padding: '10px', borderRadius: '10px', marginBottom: '8px', maxWidth: '85%', border: '1px solid var(--border-color)' }}>
-                  <p style={{ margin: 0, fontSize: '0.9rem' }}>{msg.text}</p>
-                </div>
-              ))}
-              {isGenerating && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>AI 正在生成中...</div>}
-            </div>
-            <div className="chat-input-area" style={{ padding: '8px', borderTop: '1px solid var(--border-color)', background: 'var(--bg-panel)' }}>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', background: 'var(--bg-glass)', padding: '8px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '40px' }}>
-                  <div className="mana-orb-container" style={{ width: '30px', height: '30px' }}><div className="mana-liquid" style={{ height: `${Math.round(((modelUsage[selectedModel].max - modelUsage[selectedModel].used)/modelUsage[selectedModel].max)*100)}%` }}></div></div>
-                  <span style={{ fontSize: '0.4rem', color: 'var(--text-muted)', marginTop: '2px' }}>{modelUsage[selectedModel].reset}</span>
-                </div>
-                <textarea 
-                  value={chatInput} onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="指令..." 
-                  style={{ flex: 1, background: 'transparent', color: 'white', border: 'none', outline: 'none', fontSize: '16px', minHeight: '36px', resize: 'none' }}
-                />
-                <button onClick={handleSendChat} className="btn btn-primary" style={{ padding: '6px' }}><Play size={16} fill="white" /></button>
-              </div>
-            </div>
-          </div>
-        );
-      default: return null;
-    }
-  };
+  if (!isAuthenticated) return (
+    <div style={{ height: '100dvh', width: '100vw', background: 'var(--bg-color)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <LoginView onLoginSuccess={() => setIsAuthenticated(true)} />
+    </div>
+  );
 
-  if (!isAuthenticated) return <LoginView onLoginSuccess={() => setIsAuthenticated(true)} />;
+  const usage = modelUsage[selectedModel.id] || { max: 100, used: 0, reset: '05/06 12:00' };
+  const fillPct = Math.max(5, Math.min(100, Math.round(((usage.max - usage.used) / usage.max) * 100)));
 
   return (
-    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'var(--bg-color)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'var(--bg-color)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       
-      {/* 1. Header (Notch-Aware) */}
       <header className="glass-panel" style={{ 
-        position: 'absolute', top: 0, left: 0, right: 0, 
-        height: 'calc(54px + env(safe-area-inset-top))', 
-        paddingTop: 'env(safe-area-inset-top)',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-        paddingLeft: '16px', paddingRight: '16px', 
-        zIndex: 1000, borderBottom: '1px solid var(--border-color)', 
-        background: 'var(--bg-glass)', backdropFilter: 'blur(15px)' 
+        height: 'calc(60px + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px', zIndex: 1000
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Smartphone size={18} color="var(--accent-color)" />
-          <h1 style={{ fontSize: '0.85rem', fontWeight: '700', margin: 0 }}>GravityLink <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }}>v1.11</span></h1>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ display: 'flex', gap: '5px' }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: isConnected ? 'var(--success)' : 'var(--danger)' }}></div>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: apiStatus.healthy ? 'var(--success)' : 'var(--danger)' }}></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Smartphone size={22} color={isGenerating ? "var(--success)" : "var(--accent-color)"} className={isGenerating ? "animate-pulse" : ""} />
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <h1 style={{ fontSize: '1rem', fontWeight: '900', margin: 0, color: 'white' }}>GRAVITY LINK</h1>
+            <span style={{ fontSize: '0.55rem', color: isGenerating ? 'var(--success)' : 'var(--text-muted)', fontWeight: 'bold' }}>
+              {isGenerating ? 'HOST PROCESSING...' : 'STABLE PRO v1.11'}
+            </span>
           </div>
-          <button onClick={() => setShowStorageMonitor(true)} className="btn"><MoreVertical size={18} /></button>
+        </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 12 }}>
+             <GithubIcon size={20} active={gitAuth.github} />
+             <GitlabIcon size={20} active={gitAuth.gitlab} />
+          </div>
+          <div style={{ display: 'flex', gap: 6, padding: '6px 12px', borderRadius: 14, background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-color)' }}>
+            {[ 
+              { id: 'nb-light', l: 'NB', s: isConnected }, 
+              { id: 'ai-light', l: 'AI', s: apiStatus.healthy },
+              { id: 'key-light', l: 'KEY', s: !!GEMINI_API_KEY_VALID } // 這裡會連動後端狀態
+            ].map((n, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div id={n.id} style={{ width: 6, height: 6, borderRadius: '50%', background: n.s ? 'var(--success)' : 'var(--danger)', boxShadow: n.s ? '0 0 10px var(--success)' : 'none' }}></div>
+                <span style={{ fontSize: '0.55rem', fontWeight: '900', color: n.s ? 'white' : 'var(--text-muted)' }}>{n.l}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </header>
 
-      {/* 2. Main Content (Shifted for Notch) */}
-      <main style={{ position: 'absolute', top: 'calc(54px + env(safe-area-inset-top))', bottom: 'calc(54px + env(safe-area-inset-bottom))', left: 0, right: 0, overflow: 'hidden' }}>
-        {renderContent()}
+      <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+            {chatMessages.map((m, i) => (
+              <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', background: m.role === 'user' ? 'var(--accent-color)' : 'var(--bg-panel)', padding: '14px 18px', borderRadius: '20px', marginBottom: '15px', maxWidth: '85%', border: '1px solid var(--border-color)', boxShadow: '0 8px 25px rgba(0,0,0,0.2)' }}>
+                <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: '1.6', color: 'white' }}>{m.text}</p>
+              </div>
+            ))}
+          </div>
+          
+          <div style={{ padding: '15px', background: 'var(--bg-panel)', borderTop: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', background: 'var(--bg-color)', padding: '12px', borderRadius: '20px', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '50px' }}>
+                <div className={`mana-orb-container ${isGenerating ? 'animate-pulse' : ''}`} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div className="mana-liquid" style={{ height: `${fillPct}%` }}></div>
+                  <span style={{ position: 'absolute', fontSize: '0.6rem', fontWeight: '900', color: 'white', zIndex: 10 }}>{fillPct}%</span>
+                </div>
+                <span style={{ fontSize: '0.55rem', color: 'var(--accent-color)', marginTop: '6px', fontWeight: '900' }}>{usage.reset}</span>
+              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <textarea value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="下達開發指令..." style={{ background: 'transparent', color: 'white', border: 'none', outline: 'none', fontSize: '17px', minHeight: '44px', resize: 'none' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div onClick={() => { const idx = MODELS.findIndex(m => m.id === selectedModel.id); setSelectedModel(MODELS[(idx + 1) % MODELS.length]); }} style={{ fontSize: '0.75rem', color: 'var(--accent-color)', border: '1px solid var(--accent-glow)', padding: '4px 12px', borderRadius: '10px', background: 'rgba(47,129,247,0.15)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {selectedModel.label} <ChevronDown size={12} />
+                    </div>
+                    <button onClick={handleSendChat} disabled={isGenerating} className="btn btn-primary" style={{ width: '42px', height: '42px', borderRadius: '14px', boxShadow: isGenerating ? 'none' : '0 0 15px var(--accent-glow)' }}>
+                      <Play size={20} fill="white" />
+                    </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
 
-      {/* 3. Bottom Navigation (Fixed Bottom) */}
-      <nav className="glass-panel" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '54px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderTop: '1px solid var(--border-color)', background: 'var(--bg-glass)', backdropFilter: 'blur(15px)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <button onClick={() => setActiveTab('files')} className="btn" style={{ flex: 1, color: activeTab === 'files' ? 'var(--accent-color)' : 'var(--text-muted)', flexDirection: 'column', display: 'flex', alignItems: 'center', gap: '2px' }}><FolderTree size={18} /><span style={{ fontSize: '0.55rem' }}>檔案</span></button>
-        <button onClick={() => setActiveTab('editor')} className="btn" style={{ flex: 1, color: activeTab === 'editor' ? 'var(--accent-color)' : 'var(--text-muted)', flexDirection: 'column', display: 'flex', alignItems: 'center', gap: '2px' }}><Code2 size={18} /><span style={{ fontSize: '0.55rem' }}>編輯</span></button>
-        <button onClick={() => setActiveTab('terminal')} className="btn" style={{ flex: 1, color: activeTab === 'terminal' ? 'var(--accent-color)' : 'var(--text-muted)', flexDirection: 'column', display: 'flex', alignItems: 'center', gap: '2px' }}><Terminal size={18} /><span style={{ fontSize: '0.55rem' }}>終端</span></button>
-        <button onClick={() => setActiveTab('ai')} className="btn" style={{ flex: 1, color: activeTab === 'ai' ? 'var(--accent-color)' : 'var(--text-muted)', flexDirection: 'column', display: 'flex', alignItems: 'center', gap: '2px' }}><Bot size={18} /><span style={{ fontSize: '0.55rem' }}>助理</span></button>
+      <nav className="glass-panel" style={{ height: '60px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingBottom: 'env(safe-area-inset-bottom)', flexShrink: 0 }}>
+        {[ { id: 'files', l: '檔案', i: FolderTree }, { id: 'editor', l: '編輯', i: Code2 }, { id: 'terminal', l: '終端', i: Terminal }, { id: 'ai', l: '助理', i: Bot } ].map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className="btn" style={{ flex: 1, color: activeTab === tab.id ? 'var(--accent-color)' : 'var(--text-muted)', flexDirection: 'column', gap: '5px', position: 'relative' }}>
+            <tab.i size={22} />
+            <span style={{ fontSize: '0.65rem', fontWeight: '800' }}>{tab.l}</span>
+          </button>
+        ))}
       </nav>
-
-      {showStorageMonitor && <StorageMonitor onClose={() => setShowStorageMonitor(false)} gitAuth={gitAuth} apiStatus={apiStatus} />}
     </div>
   );
 }
