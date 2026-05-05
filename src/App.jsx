@@ -473,10 +473,15 @@ export default HelloWorld;
               <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: apiStatus.healthy ? 'var(--success)' : apiStatus.online ? 'var(--warning)' : 'var(--danger)', boxShadow: apiStatus.healthy ? '0 0 6px var(--success)' : 'none' }}></div>
               <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>AI</span>
             </div>
-            {/* Git */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title={gitAuth.hasUser ? `Git: ${gitAuth.username}` : 'Git 未設定'}>
-              <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: gitAuth.hasUser ? 'var(--success)' : 'var(--warning)', boxShadow: gitAuth.hasUser ? '0 0 6px var(--success)' : 'none' }}></div>
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{gitAuth.username || 'Git'}</span>
+            {/* GitHub */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title={gitAuth.github ? 'GitHub 已連結' : 'GitHub 未連結'}>
+              <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: gitAuth.github ? 'var(--success)' : 'var(--danger)', boxShadow: gitAuth.github ? '0 0 6px var(--success)' : 'none' }}></div>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>GitHub</span>
+            </div>
+            {/* GitLab */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title={gitAuth.gitlab ? 'GitLab 已連結' : 'GitLab 未連結'}>
+              <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: gitAuth.gitlab ? 'var(--success)' : 'var(--danger)', boxShadow: gitAuth.gitlab ? '0 0 6px var(--success)' : 'none' }}></div>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>GitLab</span>
             </div>
           </div>
 

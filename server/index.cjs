@@ -139,11 +139,16 @@ io.on('connection', (socket) => {
       sendFileTree(socket);
 
       // ONE-TIME system status broadcast on login
-      let gitUser = '', gitRemote = false;
+      let gitUser = '';
+      let hasGithub = false, hasGitlab = false;
       try {
         const { execSync } = require('child_process');
         gitUser = execSync('git config user.name', { cwd: SANDBOX_DIR }).toString().trim();
-        try { execSync('git remote -v', { cwd: SANDBOX_DIR }); gitRemote = true; } catch(e) {}
+        try {
+          const remotes = execSync('git remote -v', { cwd: SANDBOX_DIR }).toString();
+          hasGithub = remotes.includes('github.com');
+          hasGitlab = remotes.includes('gitlab.com');
+        } catch(e) {}
       } catch(e) {}
 
       let apiOk = false;
@@ -158,7 +163,7 @@ io.on('connection', (socket) => {
 
       socket.emit('system_status', encryptPayload({
         gemini: { online: !!geminiModel, healthy: apiOk, model: 'gemini-2.5-flash' },
-        git: { hasUser: !!gitUser, username: gitUser || '未設定', hasRemote: gitRemote },
+        git: { hasUser: !!gitUser, username: gitUser || '未設定', github: hasGithub, gitlab: hasGitlab },
         server: { port: 3001, sandbox: SANDBOX_DIR }
       }));
     } else {
