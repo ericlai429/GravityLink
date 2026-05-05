@@ -10,14 +10,57 @@ const chokidar = require('chokidar');
 
 // Configuration
 const SANDBOX_DIR = path.join(__dirname, '..', 'sandbox');
-const I13_CTRL_DIR = 'D:\\GitHub\\i13_ctrl'; // Target directory for new mobile projects
+const I13_CTRL_DIR = 'D:\\GitHub\\i13_ctrl';
+const CONNECTION_PIN = process.env.MASTER_PIN || '888888';
+const SECRET_KEY = 'GravityLink-Private-Key-2026';
 
-// Generate Anydesk-style PIN
-const CONNECTION_PIN = Math.floor(100000 + Math.random() * 900000).toString();
-
-// Ensure Sandbox and Target directories exist
 if (!fs.existsSync(SANDBOX_DIR)) fs.mkdirSync(SANDBOX_DIR, { recursive: true });
 if (!fs.existsSync(I13_CTRL_DIR)) fs.mkdirSync(I13_CTRL_DIR, { recursive: true });
+
+// --- GEMINI AI INITIALIZATION ---
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+let geminiModel = null;
+
+if (GEMINI_API_KEY) {
+  const { GoogleGenerativeAI } = require('@google/generative-ai');
+  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+  geminiModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  console.log('🧠 Gemini AI: ONLINE (gemini-2.5-flash)');
+} else {
+  console.log('⚠️  Gemini AI: OFFLINE (未設定 GEMINI_API_KEY)');
+}
+
+const chatHistories = new Map();
+
+async function getAIResponse(prompt, socketId) {
+  if (!chatHistories.has(socketId)) chatHistories.set(socketId, []);
+  const history = chatHistories.get(socketId);
+  
+  if (geminiModel) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const chat = geminiModel.startChat({
+          history: history.slice(-10),
+          generationConfig: { maxOutputTokens: 2048 },
+        });
+        const result = await chat.sendMessage(prompt);
+        const reply = result.response.text();
+        history.push({ role: 'user', parts: [{ text: prompt }] });
+        history.push({ role: 'model', parts: [{ text: reply }] });
+        return reply;
+      } catch (err) {
+        if (err.message.includes('429') && attempt === 0) {
+          console.log('[Gemini] 額度限制，25秒後重試...');
+          await new Promise(r => setTimeout(r, 25000));
+          continue;
+        }
+        return `[AI 暫時無法回應] ${err.message.includes('429') ? '請求過於頻繁，請稍後再試。' : err.message}`;
+      }
+    }
+  } else {
+    return `[離線模式] 未設定 GEMINI_API_KEY 環境變數。`;
+  }
+}
 
 // Encryption Utilities (Shared with client)
 const encryptPayload = (data) => {
@@ -77,23 +120,96 @@ FALLBACK_PORTS.forEach(p => {
 
 // Socket Handling
 io.on('connection', (socket) => {
-  console.log(`[+] Client Connected: ${socket.id}`);
-
-  // Auth Flag for this socket
+  console.log(`[+] New Connection: ${socket.id}. Challenging for PIN...`);
   socket.isAuthenticated = false;
 
-  // Handle Anydesk PIN Verification
-  socket.on('verify_pin', (encryptedPin) => {
+  // DELAYED CHALLENGE: Give client 1s to initialize listeners
+  setTimeout(() => {
+    if (socket.connected) {
+      socket.emit('auth_required', encryptPayload({ message: 'Authentication required.' }));
+    }
+  }, 1000);
+
+  socket.on('verify_pin', async (encryptedPin) => {
     const pin = decryptPayload(encryptedPin);
-    if (pin === CONNECTION_PIN) {
+    if (String(pin) === CONNECTION_PIN) {
       socket.isAuthenticated = true;
       socket.emit('auth_result', encryptPayload({ success: true }));
       console.log(`[+] Client ${socket.id} Authenticated Successfully.`);
-      // Send initial file tree
       sendFileTree(socket);
+
+      // ONE-TIME system status broadcast on login
+      let gitUser = '', gitRemote = false;
+      try {
+        const { execSync } = require('child_process');
+        gitUser = execSync('git config user.name', { cwd: SANDBOX_DIR }).toString().trim();
+        try { execSync('git remote -v', { cwd: SANDBOX_DIR }); gitRemote = true; } catch(e) {}
+      } catch(e) {}
+
+      let apiOk = false;
+      if (geminiModel) {
+        try {
+          await geminiModel.generateContent('ping');
+          apiOk = true;
+        } catch(e) {
+          console.log(`[API] Gemini health check: ${e.message.substring(0, 60)}`);
+        }
+      }
+
+      socket.emit('system_status', encryptPayload({
+        gemini: { online: !!geminiModel, healthy: apiOk, model: 'gemini-2.5-flash' },
+        git: { hasUser: !!gitUser, username: gitUser || '未設定', hasRemote: gitRemote },
+        server: { port: 3001, sandbox: SANDBOX_DIR }
+      }));
     } else {
-      socket.emit('auth_result', encryptPayload({ success: false, message: 'Invalid PIN' }));
+      socket.emit('auth_result', encryptPayload({ success: false, message: '密碼錯誤' }));
     }
+  });
+
+  // --- AI REQUEST HANDLER (Real Gemini) ---
+  socket.on('ai_request', async (encryptedPayload) => {
+    const payload = decryptPayload(encryptedPayload);
+    if (!socket.isAuthenticated) {
+      socket.emit('auth_required', encryptPayload({ message: 'Auth required.' }));
+      return;
+    }
+    
+    const prompt = payload.prompt;
+    const promptLower = prompt.toLowerCase();
+    console.log(`[AI] "${prompt}" | Devices: ${io.engine.clientsCount}`);
+    
+    socket.broadcast.emit('ai_message', encryptPayload({ role: 'user', text: prompt }));
+    io.sockets.emit('ai_state_change', encryptPayload({ isGenerating: true }));
+
+    const isFileTask = promptLower.includes('修改') || promptLower.includes('寫入') || promptLower.includes('add') || promptLower.includes('modify') || promptLower.includes('create file');
+
+    if (isFileTask) {
+      const mockResult = { id: `req_${Date.now()}`, count: 1, type: 'File Edit', description: `已根據指令 "${prompt}" 準備好變更。` };
+      socket.pendingEdits = mockResult;
+      io.sockets.emit('ai_approval_request', encryptPayload(mockResult));
+      io.sockets.emit('ai_message', encryptPayload({ role: 'ai', text: '[NB] 已偵測到代碼變更需求。' }));
+    } else {
+      try {
+        const aiReply = await getAIResponse(prompt, socket.id);
+        io.sockets.emit('ai_message', encryptPayload({ role: 'ai', text: aiReply }));
+      } catch (err) {
+        io.sockets.emit('ai_message', encryptPayload({ role: 'ai', text: `[NB] AI 回應失敗: ${err.message}` }));
+      }
+      io.sockets.emit('ai_state_change', encryptPayload({ isGenerating: false }));
+    }
+  });
+
+  socket.on('ai_stop', () => {
+    io.sockets.emit('ai_state_change', encryptPayload({ isGenerating: false }));
+    io.sockets.emit('ai_message', encryptPayload({ role: 'ai', text: '[NB] 運算中斷。' }));
+  });
+
+  socket.on('approval_response', (encryptedPayload) => {
+    const payload = decryptPayload(encryptedPayload);
+    if (!payload) return;
+    const statusText = payload.status === 'accepted' ? '[NB] ✅ 變更已套用！' : '[NB] 已取消。';
+    io.sockets.emit('ai_message', encryptPayload({ role: 'ai', text: statusText }));
+    io.sockets.emit('ai_state_change', encryptPayload({ isGenerating: false }));
   });
 
   // Create a pseudo-terminal for this connection using Windows cmd
