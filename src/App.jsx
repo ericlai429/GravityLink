@@ -22,6 +22,7 @@ export default function App() {
   const [showStorageMonitor, setShowStorageMonitor] = useState(false);
   const [isGitHubSyncing, setIsGitHubSyncing] = useState(false);
   const [isGitLabSyncing, setIsGitLabSyncing] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
   const [gitAuth, setGitAuth] = useState({ hasUser: false, username: '', hasRemote: false });
   const [apiStatus, setApiStatus] = useState({ online: false, healthy: false, model: '' });
   const [currentPort, setCurrentPort] = useState(3001); // Default from socket.js
@@ -153,9 +154,20 @@ export default HelloWorld;
       const data = decryptPayload(encryptedData);
       if (data) {
         if (data.git) setGitAuth(data.git);
-        if (data.gemini) setApiStatus(data.gemini);
+        if (data.gemini) {
+          setApiStatus(data.gemini);
+          // If server reports warning/limited, trigger local cooldown
+          if (data.gemini.warning) setCooldown(20);
+        }
       }
     };
+
+    useEffect(() => {
+      if (cooldown > 0) {
+        const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+        return () => clearTimeout(timer);
+      }
+    }, [cooldown]);
 
     socket.on('connect', onConnect);
     socket.on('auth_required', onAuthRequired);
@@ -251,7 +263,13 @@ export default HelloWorld;
       sendEncrypted('clear_chat', {}, encryptPayload);
     }
   };
+  const handleSendChat = () => {
     if (!chatInput.trim() || isGenerating) return;
+    
+    if (cooldown > 0) {
+      setChatMessages(prev => [...prev, { role: 'ai', text: `[系統] 請等待 ${cooldown} 秒後再試，避免觸發 API 頻率限制。` }]);
+      return;
+    }
 
     const input = chatInput.trim().toLowerCase();
     const originalInput = chatInput.trim();
@@ -415,8 +433,23 @@ export default HelloWorld;
                       <Square size={16} color="var(--danger)" fill="var(--danger)" />
                     </button>
                   ) : (
-                    <button onClick={handleSendChat} className="btn" style={{ background: chatInput.trim() ? 'white' : 'rgba(255,255,255,0.1)', padding: '8px', borderRadius: '8px' }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill={chatInput.trim() ? "black" : "var(--text-muted)"} xmlns="http://www.w3.org/2000/svg"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                    <button 
+                      onClick={handleSendChat} 
+                      className="btn" 
+                      disabled={cooldown > 0}
+                      style={{ 
+                        background: cooldown > 0 ? 'rgba(255,255,255,0.05)' : (chatInput.trim() ? 'white' : 'rgba(255,255,255,0.1)'), 
+                        padding: '8px', 
+                        borderRadius: '8px',
+                        position: 'relative',
+                        minWidth: '40px'
+                      }}
+                    >
+                      {cooldown > 0 ? (
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--warning)' }}>{cooldown}s</span>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill={chatInput.trim() ? "black" : "var(--text-muted)"} xmlns="http://www.w3.org/2000/svg"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                      )}
                     </button>
                   )}
                 </div>
