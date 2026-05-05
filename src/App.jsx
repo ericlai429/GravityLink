@@ -20,9 +20,9 @@ export default function App() {
   
   const [isUploading, setIsUploading] = useState(false);
   const [showStorageMonitor, setShowStorageMonitor] = useState(false);
-  const [isGitHubSyncing, setIsGitHubSyncing] = useState(false);
-  const [isGitLabSyncing, setIsGitLabSyncing] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [systemLogs, setSystemLogs] = useState([]);
+
   const [gitAuth, setGitAuth] = useState({ hasUser: false, username: '', hasRemote: false });
   const [apiStatus, setApiStatus] = useState({ online: false, healthy: false, model: '' });
   const [currentPort, setCurrentPort] = useState(3001); // Default from socket.js
@@ -124,6 +124,9 @@ export default HelloWorld;
       const payload = decryptPayload(encryptedPayload);
       if (payload) {
         setChatMessages(prev => [...prev, { role: payload.role, text: payload.text }]);
+        if (typeof addLog === 'function') addLog(`AI: ${payload.text.substring(0, 30)}...`, 'ai');
+        if (typeof playSound === 'function') playSound('receive');
+        if (typeof vibrate === 'function') vibrate(20);
       }
     };
 
@@ -230,6 +233,36 @@ export default HelloWorld;
     );
   }
 
+  const [systemLogs, setSystemLogs] = useState([]);
+
+  const addLog = (text, type = 'info') => {
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setSystemLogs(prev => [{ time, text, type }, ...prev].slice(0, 30));
+  };
+
+  const playSound = (type) => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      if (type === 'send') {
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.05);
+      } else {
+        osc.frequency.setValueAtTime(660, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.05);
+      }
+      gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.1);
+    } catch(e) {}
+  };
+
+  const vibrate = (p = 10) => { if ('vibrate' in navigator) navigator.vibrate(p); };
+
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -301,6 +334,10 @@ export default HelloWorld;
     setChatInput('');
     setIsGenerating(true);
 
+    if (typeof playSound === 'function') playSound('send');
+    if (typeof vibrate === 'function') vibrate(10);
+    if (typeof addLog === 'function') addLog(`發送指令: ${originalInput.substring(0, 30)}`, 'user');
+
     // Emit AI request to NB (Pure Mouthpiece Mode)
     sendEncrypted('ai_request', { prompt: originalInput, model: selectedModel }, encryptPayload);
   };
@@ -337,7 +374,24 @@ export default HelloWorld;
       case 'editor':
         return <EditorView code={code} setCode={setCode} />;
       case 'terminal':
-        return <TerminalView />;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-panel)' }}>
+            <div style={{ flex: 1, minHeight: '50%' }}>
+              <TerminalView />
+            </div>
+            <div style={{ height: '120px', borderTop: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.2)', padding: '8px', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.7rem' }}>
+              <div style={{ color: 'var(--accent-color)', marginBottom: '4px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Database size={12} /> 系統活動紀錄 (System Activity)
+              </div>
+              {systemLogs.length === 0 && <div style={{ color: 'var(--text-muted)' }}>尚無活動紀錄...</div>}
+              {systemLogs.map((log, idx) => (
+                <div key={idx} style={{ marginBottom: '2px', color: log.type === 'ai' ? '#8833ff' : log.type === 'user' ? 'var(--accent-color)' : 'var(--text-muted)' }}>
+                  <span style={{ opacity: 0.5 }}>[{log.time}]</span> {log.text}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
       case 'ai':
         return (
           <div className="ai-chat-container">
