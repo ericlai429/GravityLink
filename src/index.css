@@ -215,6 +215,11 @@ body {
   .app-container.hide-main .main-workspace {
     display: none !important;
   }
+
+  /* Hide filename in header on portrait to save space */
+  .header-file-info {
+    display: none !important;
+  }
 }
 
 .landscape-prompt {
@@ -227,7 +232,6 @@ body {
   height: 100%;
   background-color: var(--bg-panel);
   position: relative;
-  padding-bottom: 60px; /* Space for fixed bottom nav */
 }
 
 /* Ensure sidebar also accounts for fixed nav in portrait */
@@ -239,15 +243,16 @@ body {
 
 .chat-history {
   flex: 1;
-  padding: 16px;
   overflow-y: auto;
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .chat-input-area {
-  padding: 0 12px 12px 12px;
+  padding: 8px;
+  background-color: var(--bg-panel);
   display: flex;
   flex-direction: column;
   gap: 8px;
