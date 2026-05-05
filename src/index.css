@@ -145,12 +145,21 @@ body {
 .mana-liquid::before {
   content: '';
   position: absolute;
-  top: -5px;
+  top: -6px;
   left: 0;
   width: 100%;
-  height: 10px;
-  background: rgba(255, 255, 255, 0.1);
+  height: 12px;
+  background: #79c0ff;
   border-radius: 50%;
+  opacity: 0.9;
+  filter: blur(0.5px);
+  z-index: 3;
+  animation: slosh 3s ease-in-out infinite;
+}
+
+@keyframes slosh {
+  0%, 100% { transform: rotate(-2deg) translateY(0); }
+  50% { transform: rotate(2deg) translateY(-1px); }
 }
 
 .mana-glare {
@@ -165,7 +174,17 @@ body {
   pointer-events: none;
 }
 
-  z-index: 2;
+.mana-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  pointer-events: none;
+  z-index: 5;
 }
 
 /* Portrait Mode Enforcer */
