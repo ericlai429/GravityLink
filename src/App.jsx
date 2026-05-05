@@ -20,7 +20,8 @@ export default function App() {
   
   const [isUploading, setIsUploading] = useState(false);
   const [showStorageMonitor, setShowStorageMonitor] = useState(false);
-  const [isGitSyncing, setIsGitSyncing] = useState(false);
+  const [isGitHubSyncing, setIsGitHubSyncing] = useState(false);
+  const [isGitLabSyncing, setIsGitLabSyncing] = useState(false);
   const [gitAuth, setGitAuth] = useState({ hasUser: false, username: '', hasRemote: false });
   const [apiStatus, setApiStatus] = useState({ online: false, healthy: false, model: '' });
   const [currentPort, setCurrentPort] = useState(3001); // Default from socket.js
@@ -126,9 +127,10 @@ export default HelloWorld;
     };
 
     const onGitSyncResult = (encryptedData) => {
-      setIsGitSyncing(false);
+      setIsGitHubSyncing(false);
+      setIsGitLabSyncing(false);
       const data = decryptPayload(encryptedData);
-      if (data) setChatMessages(prev => [...prev, { role: 'ai', text: `[Git] ${data.message}` }]);
+      if (data) setChatMessages(prev => [...prev, { role: 'ai', text: `[Git] ${data.success ? '✅' : '❌'} ${data.message}` }]);
     };
 
     const onGitAuthStatus = (encryptedData) => {
@@ -230,16 +232,17 @@ export default HelloWorld;
     reader.readAsDataURL(file);
   };
 
-  const handleGitSync = () => {
+  const handleGitSync = (remote) => {
     if (!isConnected) {
-      alert("Cannot sync: Not connected to NB Server.");
+      alert('無法同步：尚未連線至 NB。');
       return;
     }
-    const msg = prompt("Enter commit message (or leave blank for auto):");
-    if (msg === null) return; // User cancelled
+    const msg = prompt('輸入備註訊息（留空自動產生）：');
+    if (msg === null) return;
 
-    setIsGitSyncing(true);
-    sendEncrypted('git_sync', msg || `Mobile sync - ${new Date().toISOString()}`, encryptPayload);
+    if (remote === 'github') setIsGitHubSyncing(true);
+    else setIsGitLabSyncing(true);
+    sendEncrypted('git_sync', { remote, message: msg || `Mobile sync - ${new Date().toISOString()}` }, encryptPayload);
   };
 
   const handleSendChat = () => {
@@ -485,16 +488,25 @@ export default HelloWorld;
             </div>
           </div>
 
-          {/* Backup Button */}
+          {/* GitHub Backup */}
           <button 
             className="btn" 
-            onClick={handleGitSync} 
-            disabled={isGitSyncing}
-            style={{ padding: '6px 10px', borderRadius: '8px', background: 'var(--bg-glass)', border: '1px solid var(--border-color)', color: isGitSyncing ? 'var(--accent-color)' : 'var(--text-main)', opacity: isGitSyncing ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }} 
+            onClick={() => handleGitSync('github')} 
+            disabled={isGitHubSyncing}
+            style={{ padding: '5px 8px', borderRadius: '8px', background: 'var(--bg-glass)', border: '1px solid var(--border-color)', color: isGitHubSyncing ? 'var(--accent-color)' : 'var(--text-main)', opacity: isGitHubSyncing ? 0.5 : 1 }} 
             title="備份至 GitHub"
           >
-            <GitBranch size={14} className={isGitSyncing ? "animate-pulse" : ""} />
-            {isGitSyncing ? '同步中...' : '備份'}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className={isGitHubSyncing ? 'animate-pulse' : ''}><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.39.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.02 0c2.3-1.55 3.3-1.23 3.3-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.82.58C20.57 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          </button>
+          {/* GitLab Backup */}
+          <button 
+            className="btn" 
+            onClick={() => handleGitSync('gitlab')} 
+            disabled={isGitLabSyncing}
+            style={{ padding: '5px 8px', borderRadius: '8px', background: 'var(--bg-glass)', border: '1px solid var(--border-color)', color: isGitLabSyncing ? 'var(--accent-color)' : 'var(--text-main)', opacity: isGitLabSyncing ? 0.5 : 1 }} 
+            title="備份至 GitLab"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className={isGitLabSyncing ? 'animate-pulse' : ''}><path d="M23.6 9.59l-.03-.09-3.28-8.56a.87.87 0 0 0-.33-.36.89.89 0 0 0-1.01.12.87.87 0 0 0-.26.39l-2.21 6.78H7.53L5.32 1.09a.87.87 0 0 0-.26-.39.89.89 0 0 0-1.01-.12.87.87 0 0 0-.33.36L.44 9.5l-.03.09a6.2 6.2 0 0 0 2.06 7.17l.01.01.04.03 5.09 3.81 2.52 1.91 1.53 1.16a1.03 1.03 0 0 0 1.25 0l1.53-1.16 2.52-1.91 5.13-3.84.01-.01a6.2 6.2 0 0 0 2.06-7.17z"/></svg>
           </button>
 
           {/* Storage Monitor Toggle */}

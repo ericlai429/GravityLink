@@ -309,22 +309,25 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle Git Sync requests
-  socket.on('git_sync', (encryptedMsg) => {
-    const customMessage = decryptPayload(encryptedMsg) || `Mobile sync - ${new Date().toISOString()}`;
-    console.log(`[Git] Starting sync with message: ${customMessage}`);
+  // Handle Git Sync requests (per-remote)
+  socket.on('git_sync', (encryptedData) => {
+    const data = decryptPayload(encryptedData);
+    const remote = (data && data.remote) || 'origin';
+    const customMessage = (data && data.message) || `Mobile sync - ${new Date().toISOString()}`;
+    const remoteName = remote === 'github' ? 'github' : 'origin'; // origin = gitlab
+    console.log(`[Git] Pushing to ${remoteName} with message: ${customMessage}`);
 
-    // Command chain: add -> commit -> push
-    const gitCommand = `git add . && git commit -m "${customMessage}" && git push`;
+    const gitCommand = `git add . && git commit -m "${customMessage}" && git push ${remoteName} main`;
 
     exec(gitCommand, { cwd: SANDBOX_DIR }, (error, stdout, stderr) => {
+      const platformLabel = remote === 'github' ? 'GitHub' : 'GitLab';
       if (error) {
-        console.error(`[Git] Sync Error: ${error.message}`);
-        socket.emit('git_sync_result', encryptPayload({ success: false, output: error.message || stderr }));
+        console.error(`[Git] ${platformLabel} Sync Error: ${error.message}`);
+        socket.emit('git_sync_result', encryptPayload({ success: false, message: `${platformLabel} 同步失敗: ${error.message || stderr}` }));
         return;
       }
-      console.log(`[Git] Sync Success:\n${stdout}`);
-      socket.emit('git_sync_result', encryptPayload({ success: true, output: stdout }));
+      console.log(`[Git] ${platformLabel} Sync Success`);
+      socket.emit('git_sync_result', encryptPayload({ success: true, message: `${platformLabel} 備份成功！` }));
     });
   });
 
