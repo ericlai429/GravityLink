@@ -21,11 +21,11 @@ if (!fs.existsSync(I13_CTRL_DIR)) fs.mkdirSync(I13_CTRL_DIR, { recursive: true }
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 let geminiModel = null;
 
-if (GEMINI_API_KEY) {
+  if (GEMINI_API_KEY) {
   const { GoogleGenerativeAI } = require('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-  geminiModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-  console.log('🧠 Gemini AI: ONLINE (gemini-2.5-flash)');
+  geminiModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  console.log('🧠 Gemini AI: ONLINE (gemini-2.0-flash)');
 } else {
   console.log('⚠️  Gemini AI: OFFLINE (未設定 GEMINI_API_KEY)');
 }
@@ -37,7 +37,7 @@ async function getAIResponse(prompt, socketId) {
   const history = chatHistories.get(socketId);
   
   if (geminiModel) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const chat = geminiModel.startChat({
           history: history.slice(-10),
@@ -49,12 +49,20 @@ async function getAIResponse(prompt, socketId) {
         history.push({ role: 'model', parts: [{ text: reply }] });
         return reply;
       } catch (err) {
-        if (err.message.includes('429') && attempt === 0) {
-          console.log('[Gemini] 額度限制，25秒後重試...');
-          await new Promise(r => setTimeout(r, 25000));
+        const isRateLimit = err.message.includes('429');
+        const isServiceBusy = err.message.includes('503') || err.message.includes('Service Unavailable');
+        
+        if ((isRateLimit || isServiceBusy) && attempt < 2) {
+          const delay = isRateLimit ? 20000 : 3000;
+          console.log(`[Gemini] ${isRateLimit ? '額度限制' : '伺服器繁忙'}，${delay/1000}秒後重試 (第 ${attempt + 1} 次)...`);
+          await new Promise(r => setTimeout(r, delay));
           continue;
         }
-        return `[AI 暫時無法回應] ${err.message.includes('429') ? '請求過於頻繁，請稍後再試。' : err.message}`;
+        
+        let errorMsg = 'AI 暫時無法回應';
+        if (isRateLimit) errorMsg = '請求過於頻繁，請稍後再試。';
+        if (isServiceBusy) errorMsg = 'AI 伺服器目前繁忙中，請稍後再試。';
+        return `[${errorMsg}] ${err.message.substring(0, 100)}`;
       }
     }
   } else {
@@ -162,7 +170,7 @@ io.on('connection', (socket) => {
       }
 
       socket.emit('system_status', encryptPayload({
-        gemini: { online: !!geminiModel, healthy: apiOk, model: 'gemini-2.5-flash' },
+        gemini: { online: !!geminiModel, healthy: apiOk, model: 'gemini-2.0-flash' },
         git: { hasUser: !!gitUser, username: gitUser || '未設定', github: hasGithub, gitlab: hasGitlab },
         server: { port: 3001, sandbox: SANDBOX_DIR }
       }));
