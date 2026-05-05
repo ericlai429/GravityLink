@@ -317,12 +317,9 @@ export default HelloWorld;
         return <TerminalView />;
       case 'ai':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: 'var(--bg-panel)', position: 'relative' }}>
-            
-
-
+          <div className="ai-chat-container">
             {/* Chat History Area */}
-            <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="chat-history">
               {chatMessages.map((msg, idx) => (
                 <div key={idx} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', background: msg.role === 'user' ? 'var(--accent-color)' : 'var(--bg-glass)', color: msg.role === 'user' ? 'white' : 'var(--text-main)', padding: '12px 16px', borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px', border: msg.role === 'user' ? 'none' : '1px solid var(--border-color)', maxWidth: '85%' }}>
                   <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: '1.5' }}>{msg.text}</p>
@@ -336,7 +333,7 @@ export default HelloWorld;
             </div>
 
             {/* Antigravity Input & Controls Area */}
-            <div style={{ padding: '0 16px 16px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div className="chat-input-area">
               
               {/* Approval Bar (Antigravity Style) */}
               {pendingApproval && (
@@ -362,9 +359,9 @@ export default HelloWorld;
                     <div className="mana-liquid" style={{ height: `${mpPercentage}%` }}></div>
                     <div className="mana-text">{Math.round(mpPercentage)}%</div>
                   </div>
-                  <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', textAlign: 'center', background: 'rgba(0,0,0,0.5)', padding: '2px 4px', borderRadius: '4px', marginTop: '4px' }}>
+                  <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', textAlign: 'center', background: 'rgba(0,0,0,0.5)', padding: '2px 4px', borderRadius: '4px', marginTop: '4px' }}>
                     重置於 <br/> {modelUsage[selectedModel].reset}
-                  </div>
+                  </span>
                 </div>
 
                 {/* Antigravity Input Box */}
@@ -446,7 +443,7 @@ export default HelloWorld;
       {/* Right Pane: 2/3 Main Workspace */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', width: '66.66%' }}>
         {/* Header */}
-      <header className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', zIndex: 10 }}>
+      <header className="glass-panel app-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ width: '32px', height: '32px', background: 'linear-gradient(135deg, var(--accent-color), #8833ff)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
             <Smartphone size={20} color="white" />
@@ -538,7 +535,7 @@ export default HelloWorld;
         </main>
 
         {/* Bottom Navigation for Right Pane */}
-        <nav className="glass-panel" style={{ display: 'flex', justifyContent: 'space-around', padding: '8px 0', borderTop: '1px solid var(--border-color)', zIndex: 10 }}>
+        <nav className="glass-panel bottom-nav" style={{ display: 'flex', justifyContent: 'space-around', padding: '8px 0', borderTop: '1px solid var(--border-color)', zIndex: 10 }}>
           <button 
             className="btn" 
             onClick={() => setActiveTab('editor')}
