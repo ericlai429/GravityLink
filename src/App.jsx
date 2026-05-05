@@ -245,7 +245,12 @@ export default HelloWorld;
     sendEncrypted('git_sync', { remote, message: msg || `Mobile sync - ${new Date().toISOString()}` }, encryptPayload);
   };
 
-  const handleSendChat = () => {
+  const handleClearChat = () => {
+    if (window.confirm('確定要清除所有對話紀錄並重置 AI 上下文嗎？')) {
+      setChatMessages([]);
+      sendEncrypted('clear_chat', {}, encryptPayload);
+    }
+  };
     if (!chatInput.trim() || isGenerating) return;
 
     const input = chatInput.trim().toLowerCase();
@@ -382,8 +387,8 @@ export default HelloWorld;
                       <Plus size={18} />
                     </button>
                     <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} ref={fileInputRef} onChange={handleImageUpload} />
-                    
-                    {/* Model Selector (Antigravity Style - Interactive) */}
+
+                    {/* Model Selector */}
                     <div 
                       onClick={cycleModel}
                       style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)' }}
@@ -392,6 +397,16 @@ export default HelloWorld;
                       <span style={{ fontSize: '0.85rem' }}>{selectedModel}</span>
                       <ChevronDown size={14} />
                     </div>
+                    
+                    {/* Clear History Button */}
+                    <button 
+                      className="btn" 
+                      onClick={handleClearChat} 
+                      style={{ padding: '4px', color: 'var(--text-muted)' }} 
+                      title="清除對話紀錄 (重置 AI 額度)"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
 
                   {/* Send / Stop Button */}

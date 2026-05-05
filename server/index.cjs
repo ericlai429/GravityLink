@@ -234,6 +234,12 @@ io.on('connection', (socket) => {
     io.sockets.emit('ai_state_change', encryptPayload({ isGenerating: false }));
   });
 
+  socket.on('clear_chat', () => {
+    chatHistories.delete(socket.id);
+    console.log(`[AI] Cleared history for client: ${socket.id}`);
+    socket.emit('ai_message', encryptPayload({ role: 'ai', text: '[NB] 🧹 對話紀錄已清除，上下文已重置。' }));
+  });
+
   // Create a pseudo-terminal for this connection using Windows cmd
   // For a robust pty, 'node-pty' is best, but spawn('cmd.exe') works for basic usage.
   const term = spawn('cmd.exe', [], { cwd: SANDBOX_DIR });
