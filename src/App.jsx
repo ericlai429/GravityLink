@@ -33,15 +33,18 @@ export default function App() {
   const [showStorageMonitor, setShowStorageMonitor] = useState(false);
   
   const MODELS = [
+    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (推薦)' },
+    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Thinking)' },
+    { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Lite' },
     { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-    { id: 'gemini-2.0-pro-exp-02-05', label: 'Gemini 2.0 Pro Exp' },
-    { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
-    { id: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 Flash 8B' },
-    { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
-    { id: 'gemini-2.0-flash-thinking-exp', label: 'Gemini Thinking' }
+    { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Legacy)' },
+    { id: 'gemini-2.0-flash-thinking-exp', label: 'Gemini Thinking (Exp)' }
   ];
-  const [selectedModel, setSelectedModel] = useState(MODELS[0]);
-  const [modelUsage, setModelUsage] = useState({});
+  const [selectedModel, setSelectedModel] = useState(MODELS[0]); // 穩定首選
+  const [modelUsage, setModelUsage] = useState({
+    'gemini-2.5-pro': { max: 1000, used: 0, reset: 'Stable' },
+    'gemini-2.5-flash': { max: 5000, used: 0, reset: 'Stable' },
+  });
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [chatMessages, setChatMessages] = useState([
@@ -67,7 +70,7 @@ export default function App() {
           }
           return [...prev, { role: p.role, text: p.text }];
         });
-        if (p.text.includes('[執行完畢]') || p.text.includes('[成功]')) {
+        if (p.text.includes('[NB 代理執行成功]') || p.text.includes('[代理連動失敗]') || p.text.includes('[錯誤]')) {
           setIsGenerating(false);
         }
       }

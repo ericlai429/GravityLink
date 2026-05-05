@@ -77,7 +77,13 @@ PORTS.forEach(port => {
         socket.on('ai_request', async (enc) => {
             const req = decryptPayload(enc);
             if (!req) return;
-            const modelId = req.modelId || 'gemini-1.5-flash';
+            let modelId = req.modelId || 'gemini-2.5-flash';
+            
+            // 強制避障：Pro 目前沒配額，自動轉 Flash
+            if (modelId === 'gemini-2.5-pro') {
+                console.log(`[!] Redirecting ${modelId} -> gemini-2.5-flash due to quota limits.`);
+                modelId = 'gemini-2.5-flash';
+            }
             console.log(`[*] [PORT:${port}] Calling ${modelId}: "${req.prompt}"`);
             
             socket.emit('ai_message', encryptPayload({ role: 'assistant', text: `[1/3] 主機已接收指令...` }));
